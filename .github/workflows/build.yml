@@ -1,0 +1,48 @@
+name: Build ARENA
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Publish
+      run: |
+        dotnet publish ARENA.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o publish
+
+    - name: Download Inno Setup
+      run: |
+        curl -L -o innosetup.exe https://jrsoftware.org/download.php/is.exe
+        Start-Process -Wait -FilePath innosetup.exe -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'
+      shell: pwsh
+
+    - name: Build Installer
+      run: |
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
+      shell: pwsh
+
+    - name: Get Version
+      id: version
+      run: |
+        $version = (Get-Item publish\ARENA.exe).VersionInfo.FileVersion
+        if (-not $version) { $version = "1.0.0" }
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+      shell: pwsh
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.version.outputs.VERSION }}
+        name: ARENA v${{ steps.version.outputs.VERSION }}
+        files: Output/ARENA_Setup.exe
+        make_latest: true
